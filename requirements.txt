@@ -1,10 +1,11 @@
-
-numpy
-opencv-python
+streamlit
 torch
 torchvision
+opencv-python-headless
+numpy
+Pillow
+pytorch-grad-cam
 scikit-learn
 matplotlib
 pandas
 tqdm
-pillow
