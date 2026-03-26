@@ -1,0 +1,21 @@
+<<<<<<< HEAD
+numpy
+opencv-python
+torch
+torchvision
+scikit-learn
+matplotlib
+pandas
+tqdm
+pillow
+=======
+numpy
+opencv-python
+torch
+torchvision
+scikit-learn
+matplotlib
+pandas
+tqdm
+pillow
+>>>>>>> 793e70482332d6cabced4d75d1a53ed9a9c1a2f6
