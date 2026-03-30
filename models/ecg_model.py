@@ -52,3 +52,13 @@ class ECGFusionModel(nn.Module):
         out = self.classifier(fused)
 
         return out, g
+    def extract_features(self, raw, clahe):
+        fr = self.raw_net(raw)
+        fe = self.enh_net(clahe)
+
+        g = self.gate(fe)
+        fe_gated = fe * g
+
+        fused = fr + fe_gated
+
+        return fused

@@ -899,14 +899,14 @@ elif page == "Documentation":
         ### Benchmark Datasets
         
         **CASIA-Pure**
-        - Users: 100
-        - Samples: ~600 per user
-        - Capture: Constrained environment
+        - Users: ~100
+        - Total Images: ~7,200+
+        - Capture: Controlled NIR environment
         
         **PolyU-Pure**
-        - Users: 500
-        - Samples: ~300 per user
-        - Capture: More diverse conditions
+        - Users: ~500
+        - Total Images: ~24,000+ (aggregated multi-session)
+        - Capture: Diverse conditions
         """)
 
     with st.expander("🔧 Model Variants"):
@@ -1018,6 +1018,9 @@ elif page == "About":
         st.markdown("""
         #### Performance Metrics
         
+        > **⚠️ NOTE:** The following metrics are placeholder values.
+        > Replace them with your actual experimental results by updating the values in this section.
+        
         | Model | Dataset | Accuracy | EER | FAR | FRR |
         |-------|---------|----------|-----|-----|-----|
         | CASIA-RAW | CASIA | 96.2% | 0.45% | 0.32% | 0.58% |
@@ -1030,6 +1033,16 @@ elif page == "About":
         - ECG consistently outperforms baseline approaches
         - Cross-dataset transfer learning is effective
         - Explainability through Grad-CAM builds user trust
+        
+        ---
+        
+        **📝 TO UPDATE WITH YOUR RESULTS:**
+        
+        Simply replace the values in the table above with your actual:
+        - Model accuracy percentages
+        - EER (Equal Error Rate) values
+        - FAR (False Acceptance Rate) values
+        - FRR (False Rejection Rate) values
         """)
 
     st.markdown('<div class="cyber-divider"></div>', unsafe_allow_html=True)

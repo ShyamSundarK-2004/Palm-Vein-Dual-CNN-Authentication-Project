@@ -3,175 +3,160 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 import torchvision.transforms as transforms
-
 from torch.cuda.amp import autocast, GradScaler
 
+# Assuming these are your local imports
 from datasets.helmms_dataset import HELMMSPalmVeinDataset
-from models.raw_cnn import RawResNet18
-from models.dual_fusion import ConcatFusionModel
-from models.dual_sum import SumFusionModel
-from models.ecg_model import ECGFusionModel
+from models.raw_cnn import RawResNet18  # Your original single-input model
+from models.dual_fusion import ConcatFusionModel 
+from models.ecg_model import ECGFusionModel  # Your new models
 
-# 🔥 SEED
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 set_seed()
 
-# 🔥 TRANSFORMS (STRONG FOR GENERALIZATION)
+# --- TRANSFORMS ---
 train_transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.RandomHorizontalFlip(),
     transforms.RandomRotation(15),
     transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor(),
     transforms.Normalize([0.5], [0.5])
 ])
 
-test_transform = transforms.Compose([
+val_transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.5], [0.5])
 ])
 
-# 🔥 FORWARD
-def forward_pass(model, raw, clahe, model_type):
-    if model_type == "raw":
-        return model(raw)
-    elif model_type == "clahe":
-        return model(clahe)
-    else:
-        return model(raw, clahe)
+# --- DATASET WRAPPER (Handles Dual Input for Fusion) ---
+class TransformedSubset(Dataset):
+    def __init__(self, subset, transform):
+        self.subset = subset
+        self.transform = transform
 
-def extract_output(result):
-    return result[0] if isinstance(result, tuple) else result
+    def __len__(self):
+        return len(self.subset)
 
-# 🔥 TRAIN ONE EPOCH
-def train_one_epoch(model, loader, optimizer, criterion, device, model_type, scaler):
+    def __getitem__(self, idx):
+        # HELMMS returns (raw, clahe, label)
+        raw, clahe, label = self.subset[idx] 
+        if self.transform:
+            raw = self.transform(raw)
+            clahe = self.transform(clahe)
+        return raw, clahe, label
+
+# --- ENGINE ---
+def train_one_epoch(model, loader, optimizer, criterion, device, scaler, model_type):
     model.train()
     total_loss, correct, total = 0, 0, 0
-
-    for raw, clahe, labels in tqdm(loader, desc="Train"):
-        raw, clahe, labels = raw.to(device), clahe.to(device), labels.to(device)
-
+    for raw, enh, labels in tqdm(loader, desc=f"Training {model_type}", leave=False):
+        raw, enh, labels = raw.to(device), enh.to(device), labels.to(device)
+        
         optimizer.zero_grad()
-
         with autocast():
-            outputs = extract_output(forward_pass(model, raw, clahe, model_type))
+            # Logic to handle different input requirements
+            if model_type == "RAW":
+                outputs = model(raw)
+            else:
+                outputs = model(raw, enh)
+                
+            # Unpack ECGFusion output if necessary
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            
             loss = criterion(outputs, labels)
-
+            
         scaler.scale(loss).backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
         scaler.step(optimizer)
         scaler.update()
-
+        
         total_loss += loss.item() * raw.size(0)
-
         preds = outputs.argmax(dim=1)
         correct += (preds == labels).sum().item()
         total += raw.size(0)
-
     return total_loss / total, correct / total
 
-# 🔥 EVALUATE
 @torch.no_grad()
 def evaluate(model, loader, device, model_type):
     model.eval()
     correct, total = 0, 0
-
-    for raw, clahe, labels in tqdm(loader, desc="Test"):
-        raw, clahe, labels = raw.to(device), clahe.to(device), labels.to(device)
-
-        outputs = extract_output(forward_pass(model, raw, clahe, model_type))
+    for raw, enh, labels in loader:
+        raw, enh, labels = raw.to(device), enh.to(device), labels.to(device)
+        
+        if model_type == "RAW":
+            outputs = model(raw)
+        else:
+            outputs = model(raw, enh)
+            
+        if isinstance(outputs, tuple):
+            outputs = outputs[0]
+            
         preds = outputs.argmax(dim=1)
-
         correct += (preds == labels).sum().item()
         total += raw.size(0)
+    return correct / total if total > 0 else 0
 
-    return correct / total
+# --- MAIN ---
+def run(model_type="RAW"): # Choices: "RAW", "ECG", "CONCAT"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"\n" + "="*30)
+    print(f"STARTING TRAINING: {model_type}")
+    print(f"="*30)
 
-# 🔥 TRAIN MODEL (FINAL)
-def train_model(model, name, model_type, train_loader, test_loader, device):
+    ROOT = "data/raw/HELM-MS"
+    full_ds = HELMMSPalmVeinDataset(ROOT, "PolyU-Pure", "850", 224, transform=None)
+    
+    train_indices, val_indices, test_indices = random_split(
+        full_ds, [int(0.8*len(full_ds)), int(0.1*len(full_ds)), len(full_ds)-int(0.8*len(full_ds))-int(0.1*len(full_ds))],
+        generator=torch.Generator().manual_seed(42)
+    )
 
-    model = model.to(device)
+    train_loader = DataLoader(TransformedSubset(train_indices, train_transform), batch_size=16, shuffle=True)
+    val_loader   = DataLoader(TransformedSubset(val_indices, val_transform), batch_size=16, shuffle=False)
+    test_loader  = DataLoader(TransformedSubset(test_indices, val_transform), batch_size=16, shuffle=False)
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
+    # Model Selection
+    num_classes = full_ds.num_classes
+    if model_type == "RAW":
+        model = RawResNet18(num_classes).to(device)
+    elif model_type == "ECG":
+        model = ECGFusionModel(num_classes).to(device)
+    elif model_type == "CONCAT":
+        model = ConcatFusionModel(num_classes).to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=5e-4)
-
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    criterion = nn.CrossEntropyLoss()
     scaler = GradScaler()
 
-    best_acc = 0
-    patience = 5
-    counter = 0
+    for epoch in range(1, 11):
+        loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler, model_type)
+        val_acc = evaluate(model, val_loader, device, model_type)
+        print(f"Epoch {epoch:02d} | Loss: {loss:.4f} | Train: {train_acc*100:.1f}% | Val: {val_acc*100:.1f}%")
 
-    for epoch in range(1, 21):
-
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, optimizer, criterion, device, model_type, scaler
-        )
-
-        test_acc = evaluate(model, test_loader, device, model_type)
-
-        print(f"[{name}] Epoch {epoch}/20 | "
-              f"Loss: {train_loss:.4f} | "
-              f"Train: {train_acc*100:.2f}% | "
-              f"Test: {test_acc*100:.2f}%")
-
-        # 🔥 EARLY STOPPING + BEST SAVE
-        if test_acc > best_acc:
-            best_acc = test_acc
-            counter = 0
-            torch.save(model.state_dict(), f"outputs/{name}.pth")
-        else:
-            counter += 1
-
-        if counter >= patience:
-            print("🛑 Early stopping triggered")
-            break
-
-    print(f"🔥 Best {name} Accuracy: {best_acc*100:.2f}%")
-
-# 🔥 MAIN
-def run():
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("🔥 Using device:", device)
-
-    ROOT = r"data/raw/HELM-MS"
-
-    # ✅ TRAIN → PolyU
-    train_ds = HELMMSPalmVeinDataset(
-        ROOT, "PolyU-Pure", "850", 224, transform=train_transform
-    )
-
-    # ✅ TEST → CASIA
-    test_ds = HELMMSPalmVeinDataset(
-        ROOT, "CASIA-Pure", "850", 224, transform=test_transform
-    )
-
-    print("Train size:", len(train_ds))
-    print("Test size:", len(test_ds))
-
-    train_loader = DataLoader(train_ds, batch_size=16, shuffle=True, num_workers=2, pin_memory=True)
-    test_loader = DataLoader(test_ds, batch_size=16, shuffle=False, num_workers=2, pin_memory=True)
-
-    num_classes = train_ds.num_classes
-
-    # 🔥 TRAIN ALL MODELS
-    train_model(RawResNet18(num_classes), "raw", "raw", train_loader, test_loader, device)
-    train_model(RawResNet18(num_classes), "clahe", "clahe", train_loader, test_loader, device)
-    train_model(ConcatFusionModel(num_classes), "concat", "dual", train_loader, test_loader, device)
-    train_model(SumFusionModel(num_classes), "sum", "dual", train_loader, test_loader, device)
-    train_model(ECGFusionModel(num_classes), "ecg", "dual", train_loader, test_loader, device)
+    test_acc = evaluate(model, test_loader, device, model_type)
+    print(f"Final {model_type} Test Accuracy: {test_acc*100:.2f}%")
+    
+    # Save the model
+    save_path = f"{model_type}_model.pth"
+    torch.save(model.state_dict(), save_path)
+    print(f"Model saved to {save_path}")
 
 if __name__ == "__main__":
-    run()
+    # This will train all three models sequentially
+    models_to_train = ["ECG", "CONCAT"]
+    
+    for m in models_to_train:
+        run(model_type=m)

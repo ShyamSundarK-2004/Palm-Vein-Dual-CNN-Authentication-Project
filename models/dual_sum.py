@@ -40,3 +40,11 @@ class SumFusionModel(nn.Module):
         fused = fr + fe
 
         return self.classifier(fused)
+    def extract_features(self, raw, clahe=None):
+        if clahe is None:
+            x = self.backbone(raw)
+        else:
+            # dual models
+            x = self.forward_features(raw, clahe)  # adjust based on your code
+        
+        return x

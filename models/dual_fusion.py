@@ -34,3 +34,11 @@ class ConcatFusionModel(nn.Module):
         fe = self.enh_net(enh)
         fused = torch.cat([fr, fe], dim=1)
         return self.classifier(fused)
+
+    def extract_features(self, raw, clahe):
+        fr = self.raw_net(raw)
+        fe = self.enh_net(clahe)
+
+        fused = torch.cat((fr, fe), dim=1)
+
+        return fused  # 🔥 1024-dim embedding
