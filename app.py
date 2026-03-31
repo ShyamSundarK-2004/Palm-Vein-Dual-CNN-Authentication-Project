@@ -690,9 +690,9 @@ elif page == "Demo":
 
                     st.metric("Processing Latency", f"{inf_time:.2f} ms", delta_color="off")
 
-                    if confidence > 0.9:
+                    if confidence > 0.5:
                         st.success("🎯 **HIGH CONFIDENCE** - User identified successfully!")
-                    elif confidence > 0.7:
+                    elif confidence > 0.25:
                         st.info("⚠️ **MODERATE CONFIDENCE** - Verification recommended")
                     else:
                         st.warning("❌ **LOW CONFIDENCE** - Please try again")
