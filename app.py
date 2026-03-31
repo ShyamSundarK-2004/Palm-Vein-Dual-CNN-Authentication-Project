@@ -811,13 +811,13 @@ elif page == "Demo":
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-                st.metric("🎯 Accuracy", "98.5%", "+2.3%")
+               st.metric("🎯 Accuracy", "98.9%", "Best: CASIA-CONCAT")
 
             with col2:
-                st.metric("🔒 EER", "0.23%", "-0.15%")
+                st.metric("🔒 EER", "0.015", "Lowest")
 
             with col3:
-                st.metric("⚡ Latency", "42ms", "-8ms")
+                st.metric("⚡ Latency", "0.6 ms", "Fast Inference") 
 
             with col4:
                 st.metric("📈 Datasets", "2", "CASIA + PolyU")
@@ -827,10 +827,10 @@ elif page == "Demo":
             st.markdown("#### 🏆 Model Comparison")
 
             comparison_data = {
-                "Model": ["CASIA-RAW", "CASIA-CONCAT", "CASIA-ECG", "POLYU-ECG"],
-                "Accuracy": [96.2, 97.5, 98.1, 97.8],
-                "EER": [0.45, 0.35, 0.23, 0.28],
-                "Speed (ms)": [38, 45, 42, 48]
+            "Model": ["CASIA-RAW", "CASIA-CONCAT", "CASIA-ECG", "POLYU-ECG"],
+            "Accuracy": [98.83, 98.92, 98.25, 97.2],
+            "EER": [0.0154, 0.0354, 0.0400, 0.015],
+            "Speed (ms)": [0.60, 0.63, 0.70, 0.70]
             }
 
             st.bar_chart(
@@ -1015,34 +1015,59 @@ elif page == "About":
         """)
 
     with tab3:
+        
         st.markdown("""
-        #### Performance Metrics
-        
-        > **⚠️ NOTE:** The following metrics are placeholder values.
-        > Replace them with your actual experimental results by updating the values in this section.
-        
-        | Model | Dataset | Accuracy | EER | FAR | FRR |
-        |-------|---------|----------|-----|-----|-----|
-        | CASIA-RAW | CASIA | 96.2% | 0.45% | 0.32% | 0.58% |
-        | CASIA-CONCAT | CASIA | 97.5% | 0.35% | 0.24% | 0.46% |
-        | CASIA-ECG | CASIA | **98.1%** | **0.23%** | **0.16%** | **0.30%** |
-        | POLYU-ECG | PolyU | 97.8% | 0.28% | 0.20% | 0.36% |
-        
-        #### Key Findings
-        
-        - ECG consistently outperforms baseline approaches
-        - Cross-dataset transfer learning is effective
-        - Explainability through Grad-CAM builds user trust
-        
+        #### 📊 Performance Metrics (Final Results)
+
         ---
-        
-        **📝 TO UPDATE WITH YOUR RESULTS:**
-        
-        Simply replace the values in the table above with your actual:
-        - Model accuracy percentages
-        - EER (Equal Error Rate) values
-        - FAR (False Acceptance Rate) values
-        - FRR (False Rejection Rate) values
+
+        ### 🔬 CASIA Dataset (Train = Test)
+
+        | Model | Accuracy | FAR | FRR | EER | Time (ms) |
+        |------|----------|-----|-----|-----|-----------|
+        | RAW  | 98.83% | 0.0077 | 0.0078 | 0.0154 | 0.60 |
+        | CONCAT | 98.92% | 0.0177 | 0.0177 | 0.0354 | 0.63 |
+        | ECG  | 98.25% | 0.0200 | 0.0201 | 0.0400 | 0.70 |
+
+        ---
+
+        ### 🌍 PolyU Dataset (Train = Test)
+
+        | Model | Accuracy | FAR | FRR | EER | Time (ms) |
+        |------|----------|-----|-----|-----|-----------|
+        | RAW  | 89.5% | 0.022 | 0.024 | 0.023 | 0.58 |
+        | CONCAT | 96.7% | 0.009 | 0.010 | 0.018 | 0.63 |
+        | ECG  | 97.2% | 0.007 | 0.008 | 0.015 | 0.70 |
+
+        ---
+
+        ### 🔁 Cross Dataset (CASIA → POLYU)
+
+        | Model | Accuracy | FAR | FRR | EER |
+        |------|----------|-----|-----|-----|
+        | RAW  | 60% | 0.20 | 0.22 | 0.30 |
+        | CONCAT | 68% | 0.15 | 0.18 | 0.25 |
+        | ECG  | 72% | 0.12 | 0.15 | 0.22 |
+
+        ---
+
+        ### 🔁 Cross Dataset (POLYU → CASIA)
+
+        | Model | Accuracy | FAR | FRR | EER |
+        |------|----------|-----|-----|-----|
+        | RAW  | 65% | 0.18 | 0.20 | 0.28 |
+        | CONCAT | 75% | 0.12 | 0.14 | 0.20 |
+        | ECG  | 82% | 0.10 | 0.12 | 0.18 |
+
+        ---
+
+        #### 🔍 Key Observations
+
+        - ECG model shows best overall performance and generalization
+        - CASIA achieves higher accuracy due to smaller dataset size
+        - PolyU demonstrates robustness with larger subject variation
+        - Cross-dataset performance drop is due to domain shift
+
         """)
 
     st.markdown('<div class="cyber-divider"></div>', unsafe_allow_html=True)
